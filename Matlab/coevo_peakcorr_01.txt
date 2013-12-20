@@ -1,0 +1,40 @@
+% A function that calculates the cross-correlation between
+% environment and behavior, then determines the peak value and its
+% argument. In a next step, the environment vector is filtered by
+% a running average filter with variable step size and the pro-
+% cedure of finding the peak correlation is repeated.
+% The reason to do this is as follows: If a learning strategy is
+% able to react to small changes, its peak correlation should drop
+% for higher window sizes of the filter, since the filter removes
+% small variations. If a strategy, however, is more capable of
+% following large trends, its peak correlation should increase, as
+% the filter reveals larger trends.
+% 1st input: behavior vector
+% 2nd input: environment vector
+
+function [x,y]=coevo_peakcorr_01(f,p);
+
+% vector of window sizes for running average
+wsvec=[1:10:151];
+% maximum lag for cross correlation
+maxlag=200;
+
+figure
+hold on
+
+for i=1:length(wsvec)
+
+    windowSize = wsvec(i);
+    pflat=filter(ones(1,windowSize)/windowSize,1,p);
+    % since the running average filters in both directions,
+    % a correlation with future environments could be possible
+    % therefore, the filter has to be moved to the right
+    [c,lags]=crosscorr(pflat(ceil(windowSize/2):50000),f(1,1:50000-ceil(windowSize/2)),maxlag);
+    plot(lags,c,'k')
+    axis([0 ceil(maxlag/2) 0 1])
+    x(i)=find(c==max(c))-maxlag-1;
+    y(i)=max(c);
+    
+end
+
+plot(x,y,'ko-')

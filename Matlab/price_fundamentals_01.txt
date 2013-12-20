@@ -1,0 +1,84 @@
+% The efficient market hypothesis states that the price of an asset reflects
+% its fundamental value. In the confines of our model, it should then be
+% possible to guess whether A or B is the better option by looking at the
+% choice of the strategies. Moreover, changes in the value of A and B should
+% be reflected in the price immediately and not just after some time has
+% passed.
+% 
+% We checked whether this is true. For that, we look at the number of 
+% true guesses (true A>B, true B>A) derived from the choices of the learning 
+% strategies. Moreover, we filter away short term trends to check whether 
+% accuracy increases if only longer trends are considered.
+
+function [xvec truevec]=price_fundamentals_01(superp,superfig);
+
+stepSize=10;
+upperLimit=200;
+xvec=[0:stepSize:upperLimit];
+nsteps=99;   %the resolution of the observation
+
+% check
+if min(size(superfig)~=1)
+    'error in superfig dimension!'
+    return
+end
+
+% matrix that contains all environments, filtered with running average
+% filter
+spmat=zeros(length(xvec),length(superp));
+
+% vector of best true guesses as a function of filter size
+truevec=zeros(1,length(xvec));
+
+% APPLY ROUTINE
+
+% unfiltered
+spmat(1,:)=superp;
+
+windowSize=stepSize;
+counter=2;
+while windowSize<=upperLimit
+    spmat(counter,:)=filter(ones(1,windowSize)/windowSize,1,superp);
+    windowSize=windowSize+stepSize;
+    counter=counter+1;
+end
+
+% waitbar
+wb=waitbar(0,'progress');
+
+% FIND BEST TRUE GUESS
+for j=1:length(xvec)
+    
+    tp=zeros(1,nsteps+2);
+    tn=tp;fn=tp;fp=tp;
+
+    % algorithm
+    for i=1:nsteps+2
+        thresh=(i-1)/(nsteps+1);  %the threshold
+        tp(i)=sum((spmat(j,:)>0)&(superfig>thresh));
+        tn(i)=sum((spmat(j,:)<0)&(superfig<thresh));
+        fp(i)=sum((spmat(j,:)<0)&(superfig>thresh));
+        fn(i)=sum((spmat(j,:)>0)&(superfig<thresh));
+    end
+
+    % normalize
+    norma=tp+tn+fp+fn;
+    tp=tp./norma;tn=tn./norma;fp=fp./norma;fn=fn./norma;
+    
+    trues=tp+tn;
+    truevec(j)=max(trues);
+    
+    waitbar(j/length(xvec),wb)
+end
+
+close(wb)
+
+
+
+
+
+
+
+
+
+

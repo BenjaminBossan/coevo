@@ -1,0 +1,573 @@
+% this specific instance has score-type PBSLs that have variable, mutating
+% weights for gains and losses. These are encoded as strategy 3 (formerly
+% that was PBSL with equal weights
+
+clear all
+
+
+
+% P A R A M E T E R S
+
+iterations=1;    %how often the simulation is repeated
+gen=10000              %number of simulated generations
+w0=10;              %base fitness
+tmax=50;            %time per generation
+pA0=1/2;            %initial success rate of option A
+pB0=1/2;            %initial success rate of option B
+dp=.25               %shift in mean pA and pB
+pskill=0;           %max var of (pos. or neg.) influence of skill
+nindi=10000        %total population
+regime=1;           %how the environment changes. 0->no regression to the mean, 1->medium, 2->high
+incr=2/100;         %increment at which the environment becomes better or worse
+pincr=1;            %probability that environmental quality changes at all after each period
+param=28;           %number of parameters per individual
+q=.9;               %discount rate for older memory
+b=1;                %benefit from choosing correctly
+c=0;cm=0;           %cost of learning individually or socially; not functional
+mutationrate=0.001;  %the rate at which traits mutate
+mutationincr=0;     %the factor by which the probability is modified
+monitorCrosscorr=1; %if this option is 1, the crosscorrelation betw. envir. and behavior is monitored
+nstrat=14;          %number of strategies
+lambda=1;           %sensitiviy factor for reinforcement learners
+kdoubt=2;           %threshold value for use of maj. tal. by IDCs
+compare_self=0;     % Usually, ITW only screens others and then adopts the
+                    % choice of the best of them. However, they could
+                    % include themselves in the sample, so that they don't
+                    % switch if they are best themselves. To introduce this
+                    % effect, set compare_self=1; else =0.
+aversion=0;         %gives the weight of losses/gains, ie, =1->equal, >1 loss aversion, <1 win affinity
+                    %aversion=0 is the same as =1; does not work anymore
+                    %for PBSLs
+tallyn=3;           %tally number, the number of "screened" individuals
+weightscope=5     %absolute number of maximum weight for gains and losses of PBSLs
+
+% 'random seed'
+% rand('seed',17415)
+
+% STRATEGIES:
+% each individual agent is characterized by the following parameters:
+%   1) history of past choices (A->1, B->0)
+%   2) history of past successes (1->success, 0->failure)
+%   3) the fitness
+%   4) the tally number (how many individuals are screened)
+%   5) memory (for probabilistic reinforcement learning)
+%   6) bias towards choosing A (for non-probabilistic reinforcement learning)
+%   7) whom wealth imitators track
+%   8) recentness of information of wealth imitators (age in periods)
+%   9) individual differences in skill
+%  10) which strategy is chosen this round (important for mixed strategies)
+%  11) whether in this period, the individual has chosen the better of the
+%      two options (yes->1, no->0, draw->0.5)
+%  12) whenever an individual is imitated by ITW, isource gets +1
+%  --- an individual has a certain probability to use each strategy
+%      usually, each individual has only one strategy that she uses
+%      each round, but mixed strategies are possible. In that case
+%      the following parameters determine the probabilities. In case
+%      of pure strategies, the probability for one strategy is 1 and
+%      for the rest 0.
+%  13) probability to use individual learning (deterministic reinf. learning)
+%  14) probability to use majority tallying (conformity)
+%  15) probability to use success tallying (payoff-biased)
+%  16) probability to use wealth imitation (ITW, prestige)
+%  17) probability to use hierarchical strategy 1: opportunistic majority
+%      tallying (OMT)
+%      this strat uses ind. learning if successful, else maj. tallying
+%  18) probability to use hierarchical strategy 2: opportunistic individual
+%      learning (OIL)
+%      this strat uses maj. tallying if successful, else ind. learning
+%  19) probability to use probabilistic reinforcement learning
+%  20) probability to use hierarchical strategy 3: In Doubt, Conform (IDC)
+%      this strategy uses individual learning, but if the bias towards A or
+%      B is too small (<kdoubt), it uses majority tallying
+%  21) probability to use omniscient strategy, a strategy that immediately
+%      knows what to choose
+% EXPLANATION: For the population tensor, the dimensions are:
+%   1) individuals
+%   2) parameters (choice, success...)
+%   3) time
+% INDICES
+% for convenience, these indices are not passed to the coevo function.
+% Changes here have thus to be updated in coevo as well
+ichoice=1;isucc=2;ifit=3;itally=4;imemo=5;ibias=6;
+itrack=7;irecent=8;iskill=9;istrat=10;ibest=11;isource=12;
+igain=27;   % weight for gains for scoring type PBSLs
+iloss=28;   % weight for losses for scoring type PBSLs
+% STRATS:
+ipind=13;   % 1  individual learner (threshold reinforcement learning)
+ipmaj=14;   % 2  conformist
+ipsuc=15;   % 3  payoff-biased social learner (PBSL) with variable weight gains/losses
+ipwea=16;   % 4  imitate the wealthiest (ITW)
+ipomt=17;   % 5  opportunistic conformist (OC)
+ipoil=18;   % 6  opportunistic individual learner (OIL)
+iprei=19;   % 7  probabilistic reinforcement learning
+ipidc=20;   % 8  in doubt, conform (IDC)
+ipomn=21;   % 9  omniscient
+ipp31=22;   % 10 PBSL with weight on gains/losses of 3/1
+ipp13=23;   % 11 PBSL with weight on gains/losses of 1/3
+ippog=24;   % 12 PBSL who only factors in gains
+ippco=25;   % 13 PBSL-conformist
+ippmc=26;   % 14 PBSL à la McElreath
+
+
+% I N I T I A L I Z A T I O N
+ninitial=zeros(nindi,param);        %the initial state of the population
+ntsize=nindi*param*gen;
+if ntsize<=50000000
+    nt=zeros(nindi,param*gen);          %tensor for just the final state of the population
+    nt=reshape(nt,nindi,param,gen);
+    fig5=zeros(1,gen);                  %proportion mean correct
+else % if the tensor becomes too big, matlab cannot handle it -> track only every 10th generation
+    nt=reshape(zeros(nindi,param*gen/10),nindi,param,gen/10);
+    fig5=zeros(1,gen/10);
+end
+ntn=zeros(nindi,param);             %nt now
+
+pfix=.5*ones(2,tmax);               %fixed environment, for testing purposes only
+pfix(1,1:tmax)=45/100;
+pfix(1,1:20)=55/100;pfix(1,41:60)=55/100;pfix(1,81:100)=55/100;
+% pfix(1,1:10)=55/100;pfix(1,21:30)=55/100;pfix(1,41:50)=55/100;
+% pfix(1,61:70)=55/100;pfix(1,81:90)=55/100;pfix(1,101:110)=55/100;
+% pfix(1,1:30)=55/100;pfix(1,61:90)=55/100;
+% pfix(1,1:60)=55/100;
+pfix(2,1:tmax)=50/100;
+% pfix(1,151:200)=4.5/10;
+% pfix(1,201:300)=3/10;
+% pfix(1,251:300)=3.5/10;
+% pfix(1,:)=5/10;
+% pfix=[pA;pB];
+
+
+% INITIAL POPULATION
+ninitial(:,ichoice)=rand(nindi,1)>1/2;                %initialize random choice in 1st round
+ninitial(:,iskill)=(-.5+rand(nindi,1))*pskill;        %skill is uniformly distributed with mean 0
+ninitial(:,itally)=tallyn;                            %tally#
+ninitial(:,[igain iloss])=repmat([1 -1],nindi,1);     %weight gains and losses
+
+% ~~~~~~~~~~~~ change initial population here~~~~~~~~~~~~~~~
+% use this procedure to define the initial population for
+% pure strategies
+ind=[...
+    0;          % INDividual learners
+    0;          % MAJority talliers (conformists)
+    10000;          % SUCcess talliers (PBSL 1/1)
+    0;          % WEAlth imitators (ITW)
+    0;          % OCs
+    0;          % OILs
+    0;          % prob. REInforcement learners
+    0;          % IDC
+    0;          % OMNiscient strategy
+    0;          % PBSL gains/losses 3/1
+    0;          % PBSL gains/losses 1/3
+    0;          % PBSL only gains
+    0;          % PBSL-conformist
+    0];         % PBSL McElreath
+
+% ind=[...
+%     4000;          % INDividual learners
+%     0;          % MAJority talliers (conformists)
+%     1000;          % SUCcess talliers (PBSL 1/1)
+%     1000;          % WEAlth imitators (ITW)
+%     1000;          % OCs
+%     1000;          % OILs
+%     0;          % prob. REInforcement learners
+%     1000;          % IDC
+%     0;          % OMNiscient strategy
+%     0;          % PBSL gains/losses 3/1
+%     0;          % PBSL gains/losses 1/3
+%     0;          % PBSL only gains
+%     0;          % PBSL-conformist
+%     1000];         % PBSL McElreath
+
+cc=1;cind=cumsum(ind);pop=zeros(nindi,nstrat);
+if cind(length(cind))~=nindi;'error in population length'
+    break;end
+for i=1:nstrat
+    pop([cc:cind(i)],i)=1;
+    cc=cc+ind(i);
+end
+ninitial(:,ipind:ipind+nstrat-1)=pop;
+clear cc;clear pop;clear ind;clear cind;
+
+% distribute weights equally
+'weights of gains and losses distributed systematically'
+ws=2*weightscope+1;
+wd=zeros(ws^2,2);
+for i=1:ws^2
+    wd(i,1)=mod(i,(2*weightscope+1));
+end
+for i=1:ws:ws^2
+    wd(i:i+ws-1,2)=(i-1)/ws*ones(ws,1);
+end
+wd=wd-weightscope;
+wd=repmat(wd,1+ceil(nindi/(ws^2)),1);
+ninitial(:,[igain iloss])=wd(1:nindi,:);
+
+% 'achtung3'
+% ninitial(4001:6000,itally)=7;
+% ninitial(7001:8000,itally)=6;
+
+% 'achtung2'
+% ninitial(:,[ipind,ipmaj])=repmat([.7 .3],nindi,1);
+% ninitial(001:10,itally)=6;
+
+% use this procedure for mixed strategies
+% stratmat=zeros(nindi,nstrat);
+% for i=1:nindi;stratmat(i,:)=randperm(nstrat);end
+% stratmat=stratmat/10;
+% ninitial(:,[ipind,ipmaj,ipsuc,ipwea])=stratmat;
+
+
+% ninitial(:,[ipind,ipwea])=repmat([.01 .99],nindi,1);
+
+%~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+% % manipulate these values to influence the initial choice
+% ninitial(ninitial(:,ipind)==1,ichoice)=...
+%     rand(sum(ninitial(:,ipind)==1),1)<3/5;
+% ninitial(ninitial(:,ipsuc)==1,ichoice)=...
+%     rand(sum(ninitial(:,ipsuc)==1),1)<.1;
+% 'achtung'
+
+% ERROR MESSAGES
+% costs not implemented yet
+if c>0||cm>0
+    'error: costs not implemented in fitness calculation'
+    break
+end
+if iterations>1&&gen>1
+    'error: statistics only available for 1 generation right now'
+    break
+end
+
+% check whether there are only pure strategies
+% if yes -> genetics = 0
+% if not -> genetics = 1
+% as soon as mutations are possible, genetics are not pure
+genetics=coevo_check_genetics2(...
+    mutationrate,nstrat,ninitial,ipind,nindi,gen);
+
+% measure duration of simulation
+tic
+
+% progress bar
+if gen>10||iterations>10
+    wb=waitbar(0,'progress');
+end
+
+% S T A R T   O F   T H E   S I M U L A T I O N
+countA=zeros(3,1);
+
+for x=1:iterations
+
+    for g=1:gen
+        
+        % initialize simulation
+        [n,pA,pB] = coevo_pbsl_01(...
+        tmax,...    %tmax time of simulation
+        nindi,...   %nindi # of individuals
+        nstrat,...  %# of strategy types
+        incr,...    %the increment
+        pincr,...   %probability that patch quality changes
+        w0,...      %the base fitness
+        b,...       %the benefit from succeeding
+        c,...       %the tallying cost as a function of the benefit
+        cm,...      %the cost per memory slot
+        ninitial,...%initial state of the population
+        pA0,...     %remember last pA
+        pB0,...     %remember last pB
+        dp,...      %shift in mean pA and pB
+        pfix,...    %a fixed environment for testing purposes
+        param,...   %# of parameter values
+        q,...       %oblivousness, discount for older memory
+        lambda,...  %sensitivity factor for reinforcement learners, higher->steeper
+        genetics,...%whether pure (0) or mixed strategies (1)
+        kdoubt,...  %threshold value for ODCs
+        compare_self,...    %ITW looks at own wealth?
+        aversion,...%whether positive/negative information is taken into account
+        regime);    %regime, how the environment changes. 1->low variance, 2->high variance
+    
+        choicesvec=n(:,ichoice,tmax);   %remember as 1st choice for stats
+
+        % I N H E R I T A N C E
+        ninitial2=ninitial;                 %copy initial state
+        if ntsize<=50000000
+            nt(:,:,g)=n(:,:,tmax);              %the final state
+            % monitor mean proportion of correct choices
+            fig5(g)=coevo_meancorrect3(pA,pB,n,nindi,ichoice,tmax);
+        else
+            if mod(g,10)==0
+                nt(:,:,g/10)=n(:,:,tmax);
+                fig5(g/10)=coevo_meancorrect3(pA,pB,n,nindi,ichoice,tmax);
+            end
+        end
+        ntn=n(:,:,tmax);
+        
+        % COPY INHERITABLE CHARACTERS + MUTATE
+        ninitial=coevo_next_pbsl_01(nindi,g,param,ntn,mutationrate,...
+            nstrat,ichoice,ifit,itally,imemo,iskill,ipind,mutationincr,...
+            weightscope,igain,iloss);
+
+        % remember LAST STATE OF ENVIRONMENT
+        pA0=pA(1,tmax);
+        pB0=pB(1,tmax);
+        
+        % distribute skill anew
+        ninitial(:,iskill)=(-.5+rand(nindi,1))*pskill;
+        
+        %progression
+        if gen>10||iterations>10
+            if iterations==1
+                if mod(g,10)==0
+                    waitbar(g/gen,wb);
+                end
+            elseif iterations>1
+                if mod(x,10)==0
+                    waitbar(x/iterations,wb);
+                end
+            end
+        end
+
+    end
+    
+    % initiation of measure variables
+    if ((g==1)&(x==1))
+        [unik,unikchar]=coevo_find_unique(n,istrat,nstrat);
+        meancorrstat=zeros(length(unik),iterations);
+        majority_correct=zeros(1,iterations);
+        wealth_info=zeros(length(unik),tmax*iterations);
+        wealth_info=reshape(wealth_info,length(unik),tmax,iterations);
+        wealth_age=zeros(tmax,iterations);
+        correlstat=zeros(length(unik),iterations);
+        correspstat=zeros(length(unik),iterations);
+        sourcestat=zeros(length(unik),iterations);
+        if monitorCrosscorr==1
+            % the behavior of the strategies
+            superfig=zeros(length(unik),tmax*iterations);
+            % the environment
+            superp=zeros(1,tmax*iterations);
+%             % use this to calculate the delay:
+%             [XCF,Lags,Bounds]=crosscorr(superp,superfig,100);
+%             plot(Lags,XCF);
+        end
+    end
+    
+    % for more than 1 iteration:
+    % statistics on mean correct choices
+    [meancorr,unik,unikchar,majority_was_right,corresp]=...
+        coevo_meancorrect8(pA,pB,n,tmax,nindi,ichoice,...
+        istrat,ibest,nstrat,genetics);
+    meancorrstat(:,x)=meancorr;
+    majority_correct(x)=majority_was_right;
+    correspstat(:,x)=corresp;
+    % how often has this strategy been the role model for ITW?
+    for s=1:length(unik)
+        sourcestat(s,x)=mean(n(find(n(:,istrat,1)==unik(s)),isource,tmax));
+    end
+    if monitorCrosscorr==1
+        fig1=zeros(length(unik),tmax);
+        for t=1:tmax
+            for j=1:length(unik)
+                ind0=find((n(:,ichoice,t)==1)&(n(:,istrat,t)==unik(j)));
+                ind1=find(n(:,istrat,t)==unik(j));
+                fig1(j,t)=length(ind0)/length(ind1);
+            end
+        end
+        superfig(:,((x-1)*tmax+1):x*tmax)=fig1;
+        superp(((x-1)*tmax+1):x*tmax)=pA-pB;
+    end
+    
+    % statistics on source and age of information from ITW
+    if find(unik==4)~=0
+        [fig_wealth_info,fig_wealth_age,unikchar2]=...
+            coevo_wealth_info_age(unik,tmax,n,itrack,istrat,unikchar,irecent);
+        wealth_info(:,:,x)=fig_wealth_info;
+        wealth_age(:,x)=fig_wealth_age(1,:);
+    end
+    
+    % for more than 1 iteration: use original initial state
+    % as input for the next generation, except that choices
+    % are inherited
+    if iterations>1
+        ninitial=ninitial2;
+        ninitial(:,ichoice)=choicesvec;
+        % distribute skill anew
+        ninitial(:,iskill)=(-.5+rand(nindi,1))*pskill;
+    end
+    
+%     % how fitness develops over time
+%     % relative difference between wea and ind
+%     if x==1
+%         fitdiff=zeros(1,tmax);
+%     end
+%     meanfitind=zeros(1,tmax);
+%     meanfitwea=zeros(1,tmax);
+%     for tt=1:tmax
+%         meanfitind(tt)=mean(n(find(n(:,istrat,tt)==1),ifit,tt));
+%         meanfitwea(tt)=mean(n(find(n(:,istrat,tt)==4),ifit,tt));
+%     end
+%     fitdiff=fitdiff+(meanfitwea-meanfitind)./meanfitind;
+%     if x==iterations
+%         fitdiff=fitdiff/iterations;
+%     end
+
+%    ninitial(:,ichoice)=rand(nindi,1)>1/2;
+%     if mean(n(101:1000,ichoice,tmax))>4/5
+%         countA(1)=countA(1)+1;
+%     elseif mean(n(101:1000,ichoice,tmax))<4/5
+%         countA(2)=countA(2)+1;
+%     else
+%         countA(3)=countA(3)+1;
+%     end
+%     
+%     if (mod(x,25)==1)&&(x<102)
+%         mean(meancorrstat(2,1:x))
+%         countA
+%     end
+end
+
+% E N D   O F   S I M U L A T I O N
+
+% in case memory would be exceeded
+if ntsize>50000000
+    gen=gen/10;
+end
+
+% R E S U L T S
+
+if iterations==1
+    
+    if gen==1
+        fig1=coevo_plot_1gen2(n,nt,nindi,tmax,nstrat,genetics,pA,pB,...
+            istrat,ichoice,itrack,irecent,ifit);
+        if genetics==0
+            '    strat     mean correct'
+            [unik meancorrstat]
+        elseif genetics==1
+            '    strat     mean correct'
+            [unik repmat(meancorrstat,length(unik),1)]
+        end
+        % [switchfreq,smat]=coevo_switchfreq(...
+        %     pA,pB,n,tmax,nindi,ichoice,istrat,nstrat,genetics);
+        % switchfrequency=switchfreq
+
+        
+        
+    end
+    
+    if gen>1
+        figure %plot of the frequency of the strategies over generations
+        fig1=coevo_plot_gens2(n,nt,nindi,tmax,nstrat,genetics,gen,...
+            istrat,ichoice,fig5,ipind,ntsize);
+        set(gca,'fontsize',14)
+        xlabel('generation','fontsize',14)
+        ylabel('frequency','fontsize',14)
+        
+        figure %plot of mean/mode weights of gains/losses over generations
+        meanweightsgain=zeros(1,gen);
+        meanweightsloss=zeros(1,gen);
+        modeweightsgain=zeros(1,gen);
+        modeweightsloss=zeros(1,gen);
+        for g=1:gen
+            meanweightsgain(g)=mean(nt(find(nt(:,istrat,g)==3),igain,g));
+            meanweightsloss(g)=mean(nt(find(nt(:,istrat,g)==3),iloss,g));
+            modeweightsgain(g)=mode(nt(find(nt(:,istrat,g)==3),igain,g));
+            modeweightsloss(g)=mode(nt(find(nt(:,istrat,g)==3),iloss,g));
+        end
+        plot(meanweightsgain,'b')
+        hold on
+        plot(meanweightsloss,'r')
+        plot(modeweightsgain,'b--')
+        plot(modeweightsloss,'r--')        
+        set(gca,'fontsize',14)
+        xlabel('generation','fontsize',14)
+        ylabel('weights','fontsize',14)
+        zlabel('frequency','fontsize',14)
+        axis([0,gen,(min([min(meanweightsgain),min(modeweightsgain),...
+            min(meanweightsloss),min(modeweightsloss)])-.1),...
+            (max([max(meanweightsgain),max(modeweightsgain),...
+            max(meanweightsloss),max(modeweightsloss)])+.1)])
+        
+        figure % 3D histogram of the distribution of weights of gains/losses
+        ntpbsl=nt(find(nt(:,istrat,end)==3),:,end);
+        % u1=[min(ntpbsl(:,igain)):max(ntpbsl(:,igain))];
+        % u2=[min(ntpbsl(:,iloss)):max(ntpbsl(:,iloss))];
+        u1=[-weightscope:weightscope];
+        u2=u1;
+        hist3(ntpbsl(:,[igain iloss]),{u1' u2'})
+        xlabel('weight of gains','fontsize',14)
+        ylabel('weight of losses','fontsize',14)
+        zlabel('frequency','fontsize',14)
+        set(gca,'fontsize',14);
+        
+        figure % color map of the distribution of weights of gains/losses
+        mc=hist3(ntpbsl(:,[igain iloss]),{u1' u2'});
+        mc=mc/sum(nt(:,istrat,end)==3);
+        % NEW HERE
+        mc=[mc;mc(end,:)];
+        mc=[mc mc(:,end)];
+        % colormap from white->low freq to black->high freq
+        colormap([1-[0:.01:1]' 1-[0:.01:1]' 1-[0:.01:1]']);
+        % add 0 and 1 to data so that full scale [0;1] is used
+        u1=[u1 u1(end)+1];u2=[u2 u2(end)+1];
+        mc2=[zeros(1,length(u2));mc];
+        mc2(1,1)=1;
+        % plot "heat map"
+        surf(u2,[u1(1)-1 u1],zeros(length(u1)+1,length(u2)),mc2);
+        %surf([u2 u2(end)+1],[u1 u1(end)+1 u1(end)+2],zeros(length(u1)+1,length(u2)),mc2);
+        axis([min(u2) max(u2) min(u1) max(u1) 0 1])
+        set(gca,'fontsize',14)
+        % view from above
+        view([0 90])
+        axis square
+        colorbar
+        xlabel('weight of losses','fontsize',14)
+        ylabel('weight of gains','fontsize',14)
+        
+    end
+
+elseif iterations>1
+    % statistics
+    if genetics==0
+        % frequency of the different strategies
+        stratfreq=zeros(1,length(unik));
+        for s=1:length(unik); stratfreq(s)=sum(n(:,istrat)==unik(s));end
+        stratfreq=stratfreq/sum(stratfreq);
+        % normalize sourcestat
+        if length(find(unik==4))==1
+            sourcestat=sourcestat/stratfreq(find(unik==4));
+        end
+        % create cell that contains summary statistics
+        cellu=cell(2+length(unik),5);
+        cellu(1,1)=cellstr('Strategy');
+        cellu(1,2)=cellstr('mean corr');
+        cellu(1,3)=cellstr('% maj. right');
+        cellu(1,4)=cellstr('SEM');
+        cellu(1,5)=cellstr('source');
+        cellu(2:1+length(unik),1)=unikchar;
+        cellu(2+length(unik),1)=cellstr('group mean');
+        cellu(2:1+length(unik),2)=num2cell(mean(meancorrstat,2));
+        cellu(2+length(unik),2)=num2cell(sum(stratfreq.*mean(meancorrstat,2)'));
+        cellu(2+length(unik),3)=num2cell(mean(majority_correct));
+        cellu(2:1+length(unik),4)=num2cell(1.96*std(meancorrstat')'/sqrt(iterations));
+        cellu(2+length(unik),4)=num2cell(sum(stratfreq.*(1.96*std(meancorrstat')'/sqrt(iterations))'));
+        cellu(2:1+length(unik),5)=num2cell(mean(sourcestat,2));
+        cellu(2+length(unik),5)=num2cell(sum(stratfreq.*mean(sourcestat,2)'));
+        stats=cellu
+        
+    elseif genetics==1
+        used_strategies=unikchar;
+        probabilities=ninitial(1,[ipind:ipind+nstrat-1]);
+        probabilities=probabilities(find(probabilities~=0));
+        used_strategies(:,2)=cellstr(num2str(probabilities'))
+        mean_correct=mean(meancorrstat(1,:),2)
+        geomean_correct=geomean(meancorrstat(1,:)')'
+        majority_chose_correctly=mean(majority_correct)
+    end
+        
+end
+
+toc
+if gen>10||iterations>10
+    close(wb) %close waitbar
+end
+

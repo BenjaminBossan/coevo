@@ -1,0 +1,55 @@
+% Use this code for finding best cross correlation between behavior and
+% environment, where environment is run through moving average filters of
+% different size
+
+function [mat spmat lag cc]=best_crosscorr_01(superp,superfig);
+
+stepSize=1;
+upperLimit=100;
+crossrange=200;
+
+[s1 s2]=size(superfig);
+if s1==2
+    superfig=superfig(2,:);
+end
+
+xvec=[1:stepSize:upperLimit];
+
+
+% matrix that contains all environments, filtered with running average
+% filter
+spmat=zeros(length(xvec),length(superp));
+% APPLY ROUTINE
+% unfiltered
+spmat(1,:)=superp;
+windowSize=1+stepSize;
+counter=2;
+while windowSize<=upperLimit
+    spmat(counter,:)=filter(ones(1,windowSize)/windowSize,1,superp);
+    windowSize=windowSize+stepSize;
+    counter=counter+1;
+end
+
+
+mat=zeros(3,length(xvec));
+cc=zeros(length(xvec),2*crossrange+1);
+lag=cc;
+for i=1:length(xvec)
+%   [cc(i,:),lag(i,:)]=crosscorr(spmat(i,:),superfig,crossrange);
+    % comment: why do we have to shift the behavior relative to the
+    % environment? The reason is that filtered environments lag behind
+    % because the filter only looks back in the past. Thus agents may
+    % appear to have 'foresight' when they react to the filtered
+    % environment when really it is just that the environment has been
+    % artificially shifted to the right in time.
+  [cc(i,:),lag(i,:)]=crosscorr(spmat(i,ceil((1+stepSize*(i-1))/2):end),...
+      superfig(1:end+1-ceil((1+stepSize*(i-1))/2)),crossrange);
+  mat(:,i)=[1+stepSize*(i-1) max(cc(i,:)) lag(i,find(cc(i,:)==max(cc(i,:))))];
+end
+mat=mat';
+
+'best correlated trend, best correlation, lag of best correlation'
+[mat((find(mat(:,2)==max(mat(:,2)))),1) max(mat(:,2)) mat((find(mat(:,2)==max(mat(:,2)))),3)]
+
+
+

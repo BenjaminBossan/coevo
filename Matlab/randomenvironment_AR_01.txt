@@ -1,0 +1,20 @@
+function [pA pB]=randomenvironment_AR_01(tmax,pA0,pB0,dp,phi,sig);
+
+regime=1;           %how the environment changes. 0->no regression to the mean, 1->medium, 2->high
+incr=2/100;         %increment at which the environment becomes better or worse
+pincr=1;            %probability that environmental quality changes at all after each period
+
+
+pA=zeros(1,tmax);
+pB=pA;
+
+pA(1)=pA0-0.5;
+pB(1)=pB0-0.5;
+
+for t=(2:tmax);
+    pA(t)=phi*pA(t-1)+(rand-0.5)*sig;
+    pB(t)=phi*pB(t-1)+(rand-0.5)*sig;
+end
+
+pA=pA+dp+0.5;
+pB=pB+dp+0.5;

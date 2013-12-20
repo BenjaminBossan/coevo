@@ -1,0 +1,64 @@
+% this function tries to predict whether pA-pB>0 or not,
+% with only the behavior of the population as input. 
+% OUTPUT:
+% The numbers of true positives (tp), true negatives(tn), 
+% false positives (fp), and false negatives(fn) are given and plotted
+% INPUT:
+% superp is environment
+% superfig is behavior of population
+
+function [tp,tn,fp,fn,opt,h1]=predict_pos_neg_01(superp,superfig);
+
+% parameters
+steps=99;   %the resolution of the observation
+
+% initialize
+[s1 s2]=size(superfig);
+if s1>1
+    superfig=superfig(2,:);
+end
+tp=zeros(1,steps+2);
+tn=tp;fp=tp;fn=tp;
+
+% algorithm
+for i=1:steps+2
+    thresh=(i-1)/(steps+1);  %the threshold
+    tp(i)=sum((superp>0)&(superfig>thresh));
+    tn(i)=sum((superp<0)&(superfig<thresh));
+    fp(i)=sum((superp<0)&(superfig>thresh));
+    fn(i)=sum((superp>0)&(superfig<thresh));
+end
+
+% normalize
+norma=tp+tn+fp+fn;
+tp=tp./norma;tn=tn./norma;fp=fp./norma;fn=fn./norma;
+
+corrects=tp+tn;
+
+% plot
+figure
+axis([0 1 0 1])
+plot([0:1/(steps+1):1],fn,'k','linewidth',1.5)
+hold on
+plot([0:1/(steps+1):1],tn+fn,'k','linewidth',1.5)
+plot([0:1/(steps+1):1],tn+fn+tp,'k','linewidth',1.5)
+plot([0:1/(steps+1):1],corrects,'k--','linewidth',1.5)
+axis square
+xlabel('threshold','fontsize',14)
+ylabel('% true/false positives/negatives','fontsize',14)
+set(gca,'fontsize',14)
+set(gca,'linewidth',1)
+
+% best threshold, should be close to 0.5
+opt=[find(corrects==max(corrects))/(steps+1) 0.5;max(corrects) corrects(ceil(steps/2)+1)]
+
+% frequency distribution of choices
+h1=hist(superfig,steps+2);
+
+% % SIGNAL TO NOISE RATIO
+% % root mean square
+% A1=sqrt(sum(superfig.^2)/s2);
+% A2=sqrt(sum(superp.^2)/s2);
+% SNR=(A2/A1)^2
+% SNR2=mean(superfig)/std(superfig)
+

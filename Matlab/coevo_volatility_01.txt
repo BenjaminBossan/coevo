@@ -1,0 +1,53 @@
+
+% This function searches for excess volatility
+% for this, it calculates for each unique environmental
+% state the mean behavioral response. Then it corrects
+% for this response (kind of a fit for each point),
+% thus leaving the unexplained variation.
+
+j=2;        %studied strategey
+
+incr=0.02;
+
+% round the environment
+sp=incr*round(superp/incr);
+
+% correct for delay
+[cc,lag]=crosscorr(superp,superfig(j,:),100);
+delay=lag(find(cc==max(cc)));
+% delay=0
+sp=sp(1:end-delay);
+sf=superfig(j,delay+1:end);
+
+
+tmax=length(sp);
+spunique=unique(sp);
+lmax=length(spunique);
+
+% frequency of each unique pA-pB
+funique=zeros(1,lmax);
+for i=1:lmax
+    funique(i)=sum(sp==spunique(i))/length(sp);
+end
+
+
+fvar=zeros(1,lmax);
+fmean=zeros(1,lmax);
+fstd=zeros(1,lmax);
+
+for i=1:lmax
+    fmean(i)=mean(sf(find(sp==spunique(i))));
+    fvar(i)=var(sf(find(sp==spunique(i))));
+    fstd(i)=std(sf(find(sp==spunique(i))));
+end
+
+% subtract the means to find the excess variation
+sf2=zeros(1,tmax);
+for t=1:tmax
+    sf2(t)=sf(t)-fmean(find(spunique==sp(t)));
+end
+
+% mean_rest=mean(sf2)
+excess_volatility=std(sf2)
+    
+    

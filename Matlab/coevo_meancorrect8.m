@@ -1,0 +1,69 @@
+% how many correct choices were made this round
+
+function [meancorr,unik,unikchar,majority_was_right,corresp]=...
+    coevo_meancorrect8(pA,pB,n,tmax,nindi,ichoice,...
+    istrat,ibest,nstrat,genetics)
+
+
+% find the unique strategies
+[unik,unikchar]=coevo_find_unique(n,istrat,nstrat);
+
+pAbest=repmat(sign(pA-pB),nindi,1);      %=1 if A better, else -1
+nts=squeeze(n(:,istrat,:));              %strategies
+ntc=squeeze(n(:,ichoice,:));             %choices
+ntc=2*ntc-1;                             %-> -1 or 0 or +1
+%correct choice for each individual and period
+fig2=pAbest.*ntc;
+% how often both options are equally good
+equalAB=sum(pA==pB);
+
+% evaluation of how often the majority was actually right
+ntcsum=squeeze(sum(n(:,ichoice,:),1));    % the sum of the choices
+ntcsum=ntcsum';
+ntcsum=sign((ntcsum>ceil(nindi/2))-.5);   
+    %has the majority chosen A? ->1, else -1
+majority_was_right=sum(ntcsum.*pAbest(1,:)/(tmax-equalAB));
+majority_was_right=.5+majority_was_right/2;
+
+% if genetics==0
+    
+    %# of individuals per strategy over periods
+    fig1=zeros(length(unik),tmax);
+    for t=1:tmax
+        for j=1:length(unik)
+            ind1=find(n(:,istrat,t)==unik(j));
+    %             fig1(j,t)=sum(n(ind0,ichoice,t))/max(1,sum(n(:,istrat,t)))*unik(j);
+            fig1(j,t)=length(ind1)/nindi;
+        end
+    end
+    
+    indicorr=zeros(1,length(unik));
+    % mean correct, individually
+    for s=1:length(unik)
+        indicorr(s)=sum(sum((nts==(unik(s)*ones(nindi,tmax))).*...
+            fig2))/fig1(s,1)/nindi/(tmax-equalAB);
+    end
+    %aggregate
+    meancorr=indicorr/2+1/2;
+    meancorr=meancorr';
+    
+    % correspondence: for each strategy, how often did the individuals
+    % on average choose the better of the two options
+    % it recurs to ibest, which is in [-1;1], so rescale to [0;1];
+    corresp=zeros(1,length(unik));
+    for s=1:length(unik)
+        corresp(s)=mean(n((n(:,istrat,1)==unik(s)),ibest,tmax));
+    end
+    corresp=(1+corresp)/2;
+        
+% elseif genetics==1
+%     
+%     meancorr=sum(sum(fig2))/nindi/(tmax-equalAB);
+%     meancorr=meancorr/2+1/2;
+%     meancorr=meancorr';
+%     
+%     % unfinished:
+%     corresp=zeros(1,length(unik));
+%     
+% end
+
