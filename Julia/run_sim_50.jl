@@ -1,3 +1,6 @@
+using DataFrames
+using PyPlot
+
 println("STARTED")
 
 
@@ -8,13 +11,13 @@ println("STARTED")
 # P A R A M E T E R S
 
 iterations=1::Int         #how often the simulation is repeated
-gen=10000::Int                  #number of simulated generations
+gen=1::Int                  #number of simulated generations
 w0=10.::Float64              #base fitness
 tmax=50::Int                #time per generation
 pA0=0.5::Float64            #initial success rate of option A
 pB0=0.5::Float64            #initial success rate of option B
 pskill=0.::Float64           #max var of (pos. or neg.) influence of skill
-nindi=10000::Int            #total population
+nindi=1000::Int            #total population
 param=8::Int               #number of parameters per individual
 q=.9::Float64               #discount rate for older memory
 nstrat=10::Int              #number of strategies
@@ -329,12 +332,12 @@ ninitial[:,iskill]=(-.5+rand(nindi,1))*pskill;        #skill is uniformly distri
 # use this procedure to define the initial population for
 # pure strategies
 ind=[
-    9000;          # INDividual learners
+    900;          # INDividual learners
     0;          # CONformists
     0;          # Opportunstic Individual Learners
     0;          # Opportunstic Conformists
     0;          # In Doubt, Conform
-    1000;          # Imitate The Wealthiest
+    100;          # Imitate The Wealthiest
     0;          # PBSLs [4/-1]
     0;          # PBSLs [1/0]
     0;          # PBSLs McElreath
@@ -416,7 +419,8 @@ global n, pA, pB, unik
 
 # one generation:
 if (gen == 1) & (iterations == 1)
-  f = open("data/1gen01.csv", "w")
+  randName = string("data/1gen" , string(ceil(10^6*rand()))[1:5] , ".csv")
+  f = open(randName, "w")
   print(f, "pA;")
   print(f, "pB;")
   for s in unikInit
@@ -447,11 +451,19 @@ if (gen == 1) & (iterations == 1)
     print(f, "\n")
   end
   close(f)
+  # plot
+  df1 = readtable(randName, separator=';');
+  plot(df1[1]-df1[2]+.5, "k")
+  for s = 3:length(unikInit)+2
+    plot(df1[s])
+  end
 end
 
 # several generations (evolution)
 if (gen > 1) & (iterations == 1)
-  f = open("data/evo04.csv", "w")
+  randName = string("data/evo" , string(ceil(10^6*rand()))[1:5] , ".csv")
+  f = open(randName, "w")
+  # print header
   for s in unikInit
     print(f, "strat", convert(Int, s))
     if s != unikInit[length(unikInit)]
@@ -473,8 +485,12 @@ if (gen > 1) & (iterations == 1)
     print(f, "\n")
   end
   close(f)
+  # read dataframe and plot
+  df1 = readtable(randName, separator=';');
+  for s = 1:length(unikInit)
+    plot(df1[s])
+  end
 end
-
 
 
 toc()
