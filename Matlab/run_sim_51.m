@@ -53,15 +53,17 @@ lh = lhsdesign(numParams, numTests, 'criterion', 'correlation', 'iterations', 10
 for numT = 1:numTests
     
     waitbar(numT/(1+numTests),wb);
-
-    tmax = tmaxVec(numT);
-    regime = regimeVec(numT);
-    incr = incrVec(numT);
-    pincr = pincrVec(numT);
-    dpA = dpVec(numT);
-    dpB = dpVec(numT);
-    tallyn = tallyVec(numT);
-    pskill = pskillVec(numT);
+    
+    for para = 1:numParams
+        tmax = tmaxVec(lhInt(numT, para));
+        regime = regimeVec(lhInt(numT, para));
+        incr = incrVec(lhInt(numT, para));
+        pincr = pincrVec(lhInt(numT, para));
+        dpA = dpVec(lhInt(numT, para));
+        dpB = dpVec(lhInt(numT, para));
+        tallyn = tallyVec(lhInt(numT, para));
+        pskill = pskillVec(lhInt(numT, para));
+    end
     
     
     pA0=1/2;            %initial success rate of option A

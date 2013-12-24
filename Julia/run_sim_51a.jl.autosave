@@ -23,6 +23,9 @@ dpVec     = uniform/2 - 0.275;
 tallyVec  = uniform*10 + 1;
 pskillVec = (uniform - 0.1)/3;
 
+# latin hypercube sampling
+lh = lhsdesign(numParams, numTests)
+
 # fixed P A R A M E T E R S
 
 gen=10::Int                  #number of simulated generations
