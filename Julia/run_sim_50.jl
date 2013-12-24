@@ -13,7 +13,7 @@ println("STARTED")
 iterations=1::Int         #how often the simulation is repeated
 gen=1::Int                  #number of simulated generations
 w0=10.::Float64              #base fitness
-tmax=50::Int                #time per generation
+tmax=250::Int                #time per generation
 pA0=0.5::Float64            #initial success rate of option A
 pB0=0.5::Float64            #initial success rate of option B
 pskill=0.::Float64           #max var of (pos. or neg.) influence of skill
@@ -332,12 +332,12 @@ ninitial[:,iskill]=(-.5+rand(nindi,1))*pskill;        #skill is uniformly distri
 # use this procedure to define the initial population for
 # pure strategies
 ind=[
-    900;          # INDividual learners
-    0;          # CONformists
+    250;          # INDividual learners
+    750;          # CONformists
     0;          # Opportunstic Individual Learners
     0;          # Opportunstic Conformists
     0;          # In Doubt, Conform
-    100;          # Imitate The Wealthiest
+    0;          # Imitate The Wealthiest
     0;          # PBSLs [4/-1]
     0;          # PBSLs [1/0]
     0;          # PBSLs McElreath
@@ -456,6 +456,7 @@ if (gen == 1) & (iterations == 1)
   plot(df1[1]-df1[2]+.5, "k")
   for s = 3:length(unikInit)+2
     plot(df1[s])
+    ylim([0,1])
   end
 end
 

@@ -15,7 +15,7 @@ println("STARTED")
 uniform   = [0.1:0.1:1];
 
 # parameters are transformed:
-tmaxVec   = round(exp(uniform*5.5));
+tmaxVec   = round(exp(uniform*5.5))
 regimeVec = exp(uniform*2)-1;
 incrVec   = exp(uniform/20)-1;
 pincrVec  = [0.1:0.1:1];
@@ -27,8 +27,6 @@ pskillVec = (uniform - 0.1)/3;
 
 gen=10::Int                  #number of simulated generations
 w0=10.::Float64              #base fitness
-pA0=0.5::Float64            #initial success rate of option A
-pB0=0.5::Float64            #initial success rate of option B
 nindi=1000::Int            #total population
 param=8::Int               #number of parameters per individual
 q=.9::Float64               #discount rate for older memory
@@ -96,9 +94,9 @@ function coevo51(
         dpB,     #change in mean pB
         param,   #num of parameter values
         q,       #oblivousness, discount for older memory
-        kdoubt,  #threshold value for ODCs
-        regime,  #regime, how the environment changes. 1->low variance, 2->high variance
-        tallyn)  #sample size of itw
+        kdoubt,  #threshold value for IDCs
+        regime)  #regime, how the environment changes. 1->low variance, 2->high variance
+#        tallyn)  #sample size of itw
 
   # INDICES
   # for convenience, these indices are not passed to the coevo function.
@@ -230,7 +228,7 @@ function coevo51(
       if sum(n[:,istrat,t].==6) > 0 #if there are ITW users at all
 
         #number of samples individuals
-        talmax=tallyn;
+        talmax=3;
 
         #random sample of population
         randSample = ceil( nindi*rand(nindi, talmax) ); # indexes of random sample
@@ -328,103 +326,109 @@ function next_gen(nindi, param, nt, ichoice, ifit, itally, istrat)
   return nNew
 end
 
-# LHSDESIGN latin hypercube with minimal correlation, emulated from MATLAB lhsdesign
-function lhsdesign(n, p, maxiter)
+## LHSDESIGN latin hypercube with minimal correlation, emulated from MATLAB lhsdesign
+#function lhsdesign(n, p, maxiter)
 
-  X = getsample(n,p);
+#  X = getsample(n,p);
 
-  bestscore = score(X);
+#  bestscore = score(X);
 
-  for iter=2:maxiter
-    # Forward ranked Gram-Schmidt step:
-    for j=2:p
-       for k=1:j-1
-          z = takeout(X[:,j],X[:,k]);
-          X[:,k] = (rank(z) - 0.5) / n;
-       end
-    end
-    # Backward ranked Gram-Schmidt step:
-    for j=p-1:-1:1
-       for k=p:-1:j+1
-          z = takeout(X[:,j],X[:,k]);
-          X[:,k] = (rank(z) - 0.5) / n;
-       end
-    end
+#  for iter=2:maxiter
+#    # Forward ranked Gram-Schmidt step:
+#    for j=2:p
+#       for k=1:j-1
+#          z = takeout(X[:,j],X[:,k]);
+#          X[:,k] = (rank(z) - 0.5) / n;
+#       end
+#    end
+#    # Backward ranked Gram-Schmidt step:
+#    for j=p-1:-1:1
+#       for k=p:-1:j+1
+#          z = takeout(X[:,j],X[:,k]);
+#          X[:,k] = (rank(z) - 0.5) / n;
+#       end
+#    end
 
-    # Check for convergence
-    newscore = score(X);
-    if newscore <= bestscore
-       break;
-    else
-       bestscore = newscore;
-    end
-  end
+#    # Check for convergence
+#    newscore = score(X);
+#    if newscore <= bestscore
+#       break;
+#    else
+#       bestscore = newscore;
+#    end
+#  end
 
-  function getsample(n,p)
-    x = rand(n,p);
-    for i=1:p
-       x[:,i] = rank(x[:,i]);
-    end
-    x = x - rand(size(x));
-    x = x / n;
-    return x
-  end
+#  function getsample(n,p)
+#    x = rand(n,p);
+#    for i=1:p
+#       x[:,i] = rank(x[:,i]);
+#    end
+#    x = x - rand(size(x));
+#    x = x / n;
+#    return x
+#  end
 
-  function score(x)
-     # compute score function, larger is better
-     # Minimize the sum of between-column squared correlations
-     c = corrcoef(x);
-     s = -sum(sum(triu(c,1).^2));
-     return s
-  end
+#  function score(x)
+#     # compute score function, larger is better
+#     # Minimize the sum of between-column squared correlations
+#     c = corrcoef(x);
+#     s = -sum(sum(triu(c,1).^2));
+#     return s
+#  end
 
-  function triu(x)
-    # upper triangle matrix
-    y = zeros(size(x))
-    for j = 1:length(x)
-      for i = j:length(x)
-        y[i,j] = x[i,j]
-      end
-    end
-    return y
-  end
+#  function triu(x)
+#    # upper triangle matrix
+#    y = zeros(size(x))
+#    for j = 1:length(x)
+#      for i = j:length(x)
+#        y[i,j] = x[i,j]
+#      end
+#    end
+#    return y
+#  end
 
-  function takeout(x,y)
-    # Remove from y its projection onto x, ignoring constant terms
-    xc = x - mean(x);
-    yc = y - mean(y);
-    b = (xc-mean(xc))\(yc-mean(yc));
-    z = y - b*xc;
-    return z
-  end
+#  function takeout(x,y)
+#    # Remove from y its projection onto x, ignoring constant terms
+#    xc = x - mean(x);
+#    yc = y - mean(y);
+#    b = (xc-mean(xc))\(yc-mean(yc));
+#    z = y - b*xc;
+#    return z
+#  end
 
-  function rank(x)
-    # Similar to tiedrank, but no adjustment for ties here
-    (sx, rowidx) = sort(x);
-    r[rowidx] = 1:length(x);
-    r = r[:]
-    return r
-  end
+#  function rank(x)
+#    # Similar to tiedrank, but no adjustment for ties here
+#    (sx, rowidx) = sort(x);
+#    r[rowidx] = 1:length(x);
+#    r = r[:]
+#    return r
+#  end
 
-  return X
+#  return X
 
-end
+#end
 
+# measure duration of simulation
+tic()
 
 for numT = 1:numTests
 
-  println("--- Progress: ", numT/(1+numTests))
+  println("--- Progress: ", round(100*numT/(1+numTests), 0), "%")
 
-  tmax = tmaxVec(numT);
-  regime = regimeVec(numT);
-  incr = incrVec(numT);
-  pincr = pincrVec(numT);
-  dpA = dpVec(numT);
-  dpB = dpVec(numT);
-  tallyn = tallyVec(numT);
-  pskill = pskillVec(numT);
+  tmax = tmaxVec[numT];
+  regime = regimeVec[numT];
+  incr = incrVec[numT];
+  pincr = pincrVec[numT];
+  dpA = dpVec[numT];
+  dpB = dpVec[numT];
+  sampleSize = tallyVec[numT];
+  pskill = pskillVec[numT];
 
+
+  pA0=0.5::Float64            #initial success rate of option A
+  pB0=0.5::Float64            #initial success rate of option B
   pA0=pA0+dpA;pB0=pB0+dpB;
+
 
   # I N I T I A L I Z A T I O N
   ninitial=zeros(nindi,param);        #the initial state of the population
@@ -438,7 +442,6 @@ for numT = 1:numTests
   # INITIAL POPULATION
   ninitial[:,ichoice]=rand(nindi,1).>1/2;                #initialize random choice in 1st round
   ninitial[:,iskill]=(-.5+rand(nindi,1))*pskill;        #skill is uniformly distributed with mean 0
-
 
   # ~~~~~~~~~~~~ change initial population here~~~~~~~~~~~~~~~
   # use this procedure to define the initial population for
@@ -468,57 +471,53 @@ for numT = 1:numTests
   # unique strategies at the beginning
   unikInit = unique(ninitial[:,istrat])
 
-  # measure duration of simulation
-  tic()
 
   for g=1:gen
-
     # learning process
-    (n, pA, pB) = coevo51(tmax,nindi,nstrat,incr,pincr,w0,
-                  ninitial,pA0,pB0,dpA,dpB,param,q,kdoubt,regime,tallyn)
+    (n, pA, pB) = coevo51(tmax,nindi,nstrat,incr,pincr,w0,ninitial,
+                  pA0,pB0,dpA,dpB,param,q,kdoubt,regime)
 
-    # LAST STATES
-    choicesVec = n[:, ichoice, tmax] # remember last choices
-    nt[:, :, g] = n[:, :, tmax] # remember final state
-    pA0 = pA[1, tmax]
-    pB0 = pB[1, tmax]
+#    # LAST STATES
+#    choicesVec = n[:, ichoice, tmax] # remember last choices
+#    nt[:, :, g] = n[:, :, tmax] # remember final state
+#    pA0 = pA[1, tmax]
+#    pB0 = pB[1, tmax]
 
+#    unik = unique(n[:,istrat,1])
 
-    unik = unique(n[:,istrat,1])
-
-    ninitial2 = ninitial             # remember previous initial state
-    # next generation
-    nNew = next_gen(nindi, param, nt[:, :, g], ichoice, ifit, itally, istrat)
-    ninitial[:, :] = nNew[: ,:]
+#    ninitial2 = ninitial             # remember previous initial state
+#    # next generation
+#    nNew = next_gen(nindi, param, nt[:, :, g], ichoice, ifit, itally, istrat)
+#    ninitial[:, :] = nNew[: ,:]
 
   end
 
-  if (gen > 1)
-    randName = string("data/evoLH_" , string(numT) , ".csv")
-    f = open(randName, "w")
-    # print header
-    for s in unikInit
-      print(f, "strat", convert(Int, s))
-      if s != unikInit[length(unikInit)]
-        print(f, ";")
-      end
-    end
-    print(f, "\n")
-    for gg = 1:gen
-      for s in unikInit
-        print(f,
-          sum(
-            (nt[:, istrat, gg].==s)
-          )/nindi
-        )
-        if s != unikInit[length(unikInit)]
-          print(f, ";")
-        end
-      end
-      print(f, "\n")
-    end
-    close(f)
-  end
+#  if (gen > 1)
+#    randName = string("data/evoLH_" , string[numT] , ".csv")
+#    f = open(randName, "w")
+#    # print header
+#    for s in unikInit
+#      print(f, "strat", convert(Int, s))
+#      if s != unikInit[length(unikInit)]
+#        print(f, ";")
+#      end
+#    end
+#    print(f, "\n")
+#    for gg = 1:gen
+#      for s in unikInit
+#        print(f,
+#          sum(
+#            (nt[:, istrat, gg].==s)
+#          )/nindi
+#        )
+#        if s != unikInit[length(unikInit)]
+#          print(f, ";")
+#        end
+#      end
+#      print(f, "\n")
+#    end
+#    close(f)
+#  end
 
 end
 

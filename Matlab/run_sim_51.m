@@ -11,8 +11,6 @@ wb=waitbar(0,'progress');
 iterations=1;    %how often the simulation is repeated
 gen=5000;              %number of simulated generations
 w0=10;              %base fitness
-pA0=1/2;            %initial success rate of option A
-pB0=1/2;            %initial success rate of option B
 nindi=10000;        %total population
 param=22;           %number of parameters per individual
 q=.9;               %discount rate for older memory
@@ -48,7 +46,7 @@ pskillVec = (uniform - 0.1)/3;
 % form latin hypercube (#num params, #num tests, minimize correlation, #num
 % trials to form hypercube)
 numParams = 7;
-numTests  = 100;
+numTests  = 20;
 lh = lhsdesign(numParams, numTests, 'criterion', 'correlation', 'iterations', 1000);
 [lhSorted, lhInt] = sort(lh); % get the order as integers
 
@@ -65,7 +63,10 @@ for numT = 1:numTests
     tallyn = tallyVec(numT);
     pskill = pskillVec(numT);
     
-    pA0=pA0+dpA;pB0=pB0+dpB;
+    
+    pA0=1/2;            %initial success rate of option A
+    pB0=1/2;            %initial success rate of option B
+    pA0=pA0+dpA;pB0=pB0+dpB; % modification through dp
 
 
     % STRATEGIES:
@@ -193,6 +194,7 @@ for numT = 1:numTests
         ninitial2=ninitial;                 %copy initial state
         if mod(g,10)==1
             nt(:,:,1+(g-1)/10)=n(:,:,tmax);
+            nt = single(nt);
         end
         ntnow = n(:,:,tmax);                  %current final state
 
