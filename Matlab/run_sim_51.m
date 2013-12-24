@@ -46,7 +46,7 @@ pskillVec = (uniform - 0.1)/3;
 % form latin hypercube (#num params, #num tests, minimize correlation, #num
 % trials to form hypercube)
 numParams = 7;
-numTests  = 20;
+numTests  = 100;
 lh = lhsdesign(numParams, numTests, 'criterion', 'correlation', 'iterations', 1000);
 [lhSorted, lhInt] = sort(lh); % get the order as integers
 

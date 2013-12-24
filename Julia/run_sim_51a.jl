@@ -23,9 +23,10 @@ dpVec     = uniform/2 - 0.275;
 tallyVec  = uniform*10 + 1;
 pskillVec = (uniform - 0.1)/3;
 
+
 # fixed P A R A M E T E R S
 
-gen=10::Int                  #number of simulated generations
+gen=1000::Int                  #number of simulated generations
 w0=10.::Float64              #base fitness
 nindi=1000::Int            #total population
 param=8::Int               #number of parameters per individual
@@ -416,18 +417,24 @@ end
 # measure duration of simulation
 tic()
 
+# latin hypercube sampling
+lh = lhsdesign(numParams, numTests, 100)
+
 for numT = 1:numTests
 
   println("--- Progress: ", round(100*numT/(1+numTests), 0), "%")
 
-  tmax = tmaxVec[numT];
-  regime = regimeVec[numT];
-  incr = incrVec[numT];
-  pincr = pincrVec[numT];
-  dpA = dpVec[numT];
-  dpB = dpVec[numT];
-  sampleSize = tallyVec[numT];
-  pskill = pskillVec[numT];
+  lhInt = sortperm(lh[:,numTests])
+  for para = 1:numParams
+    tmax = tmaxVec[lhInt[para]];
+    regime = regimeVec[lhInt[para]];
+    incr = incrVec[lhInt[para]];
+    pincr = pincrVec[lhInt[para]];
+    dpA = dpVec[lhInt[para]];
+    dpB = dpVec[lhInt[para]];
+    tallyn = tallyVec[lhInt[para]];
+    pskill = pskillVec[lhInt[para]];
+  end
 
 
   pA0=0.5::Float64            #initial success rate of option A
